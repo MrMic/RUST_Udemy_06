@@ -1,0 +1,279 @@
+#+TITLE: Architecture d'un projet Rust : Package / Crate / Module
+#+AUTHOR: Michaël CHLON
+#+DATE: 2026-06-20
+#+OPTIONS: toc:2 num:t
+
+* Vue d'ensemble :toc:
+- [[#vue-densemble][Vue d'ensemble]]
+- [[#package][Package]]
+- [[#crate][Crate]]
+- [[#module][Module]]
+  - [[#chemins-paths][Chemins (paths)]]
+  - [[#visibilité][Visibilité]]
+- [[#schéma-explicatif][Schéma explicatif]]
+- [[#arborescence-type-dun-package][Arborescence type d'un package]]
+- [[#à-retenir][À retenir]]
+- [[#package-1][Package]]
+- [[#crate-1][Crate]]
+- [[#module-1][Module]]
+  - [[#chemins-paths-1][Chemins (paths)]]
+  - [[#visibilité-1][Visibilité]]
+- [[#schéma-explicatif-1][Schéma explicatif]]
+- [[#arborescence-type-dun-package-1][Arborescence type d'un package]]
+- [[#à-retenir-1][À retenir]]
+
+* Vue d'ensemble
+
+Rust organise le code sur trois niveaux emboîtés :
+
+| Niveau  | Rôle                                      | Défini par              |
+|---------+-------------------------------------------+-------------------------|
+| *Package* | Unité de distribution / build (Cargo)     | =Cargo.toml=              |
+| *Crate*   | Unité de compilation (1 arbre de modules) | un fichier racine (.rs) |
+| *Module*  | Unité d'organisation + visibilité         | mot-clé =mod=             |
+
+Relation d'inclusion :
+
+: Package  ⊇  1+ Crates  ⊇  arbre de Modules  ⊇  items (fn, struct, enum...)
+
+* Package
+
+- Plus grande unité gérée par *Cargo*.
+- Décrit par un seul =Cargo.toml= (nom, version, dépendances, édition).
+- Contient *au moins une* crate, *au plus une* crate /library/.
+- Peut contenir *plusieurs* crates /binary/.
+
+Règles de Cargo (convention = racines de crate automatiques) :
+
+| Chemin       | Crate produite                 |
+|--------------+--------------------------------|
+| =src/main.rs=  | crate binary (nom du package)  |
+| =src/lib.rs=   | crate library (nom du package) |
+| =src/bin/*.rs= | crates binary supplémentaires  |
+
+* Crate
+
+- *Unité de compilation* : le compilateur =rustc= traite une crate à la fois.
+- Deux types :
+  - *binary* : possède =fn main()=, produit un exécutable.
+  - *library* : pas de =main=, produit du code réutilisable (=.rlib=).
+- Chaque crate a un *module racine* (crate root) :
+  - =main.rs= → module racine de la crate binary
+  - =lib.rs=  → module racine de la crate library
+- La crate forme un *arbre de modules* dont la racine s'appelle =crate=.
+
+* Module
+
+- Unité d'*organisation* et de *contrôle de visibilité* (=pub=).
+- Déclaré avec =mod=. Par défaut tout est *privé* (visible seulement dans le module et ses descendants).
+- Trois façons de définir le contenu d'un module :
+
+#+begin_src rust
+// 1. inline
+mod jardin {
+    pub mod legumes { pub fn planter() {} }
+}
+
+// 2. fichier frère : src/jardin.rs
+mod jardin;
+
+// 3. dossier : src/jardin/mod.rs  (ou src/jardin.rs + src/jardin/legumes.rs)
+mod jardin;
+#+end_src
+
+** Chemins (paths)
+
+- *absolu* : part de =crate= → =crate::jardin::legumes::planter()=
+- *relatif* : =self=, =super= (module parent), ou nom direct.
+- =use= crée un raccourci (import) dans le scope courant.
+
+#+begin_src rust
+use crate::jardin::legumes::planter;
+planter();
+#+end_src
+
+** Visibilité
+
+| Mot-clé    | Portée                               |
+|------------+--------------------------------------|
+| (rien)     | privé au module                      |
+| =pub=        | public                               |
+| =pub(crate)= | public dans toute la crate seulement |
+| =pub(super)= | public pour le module parent         |
+
+* Schéma explicatif
+
+#+begin_example
+                         ┌──────────────────────────────────────────┐
+                         │              PACKAGE                     │
+                         │            (Cargo.toml)                  │
+                         │   nom · version · édition · deps         │
+                         └──────────────────────────────────────────┘
+                                          │ contient
+                  ┌───────────────────────┴────────────────────────┐
+                  ▼                                                 ▼
+        ┌───────────────────┐                          ┌───────────────────────┐
+        │  CRATE library    │                          │   CRATE binary        │
+        │   src/lib.rs      │                          │    src/main.rs        │
+        │  (crate root)     │                          │   fn main() {…}       │
+        └───────────────────┘                          └───────────────────────┘
+                  │ arbre de modules
+                  ▼
+        crate (racine)
+        ├── mod reseau            (src/reseau.rs)
+        │   ├── pub fn connecter()
+        │   └── mod client        (src/reseau/client.rs)
+        │       └── pub fn envoyer()
+        └── mod jardin            (src/jardin/mod.rs)
+            └── pub mod legumes
+                └── pub fn planter()
+
+   Accès depuis main.rs :
+       use ma_lib::reseau::connecter;   // crate externe (la library du package)
+       crate::jardin::legumes::planter(); // chemin absolu interne
+#+end_example
+
+* Arborescence type d'un package
+
+#+begin_example
+mon_package/
+├── Cargo.toml          ← définit le PACKAGE
+├── src/
+│   ├── lib.rs          ← racine de la CRATE library
+│   ├── main.rs         ← racine d'une CRATE binary
+│   ├── reseau.rs       ← MODULE reseau
+│   ├── reseau/
+│   │   └── client.rs   ← MODULE reseau::client
+│   └── bin/
+│       └── outil.rs    ← CRATE binary supplémentaire
+└── tests/              ← crates d'intégration (1 crate par fichier)
+#+end_example
+
+* À retenir
+
+- =Cargo.toml= = 1 package.
+- 1 package = 0..1 library + 0..N binaries.
+- 1 crate = 1 compilation = 1 arbre de modules avec racine =crate=.
+- =mod= découpe, =pub= expose, =use= raccourcit, les paths localisent.
+
+: Package  ⊇  1+ Crates  ⊇  arbre de Modules  ⊇  items (fn, struct, enum...)
+
+* Package
+
+- Plus grande unité gérée par *Cargo*.
+- Décrit par un seul =Cargo.toml= (nom, version, dépendances, édition).
+- Contient *au moins une* crate, *au plus une* crate /library/.
+- Peut contenir *plusieurs* crates /binary/.
+
+Règles de Cargo (convention = racines de crate automatiques) :
+
+| Chemin       | Crate produite                 |
+|--------------+--------------------------------|
+| =src/main.rs=  | crate binary (nom du package)  |
+| =src/lib.rs=   | crate library (nom du package) |
+| =src/bin/*.rs= | crates binary supplémentaires  |
+
+* Crate
+
+- *Unité de compilation* : le compilateur =rustc= traite une crate à la fois.
+- Deux types :
+  - *binary* : possède =fn main()=, produit un exécutable.
+  - *library* : pas de =main=, produit du code réutilisable (=.rlib=).
+- Chaque crate a un *module racine* (crate root) :
+  - =main.rs= → module racine de la crate binary
+  - =lib.rs=  → module racine de la crate library
+- La crate forme un *arbre de modules* dont la racine s'appelle =crate=.
+
+* Module
+
+- Unité d'*organisation* et de *contrôle de visibilité* (=pub=).
+- Déclaré avec =mod=. Par défaut tout est *privé* (visible seulement dans le module et ses descendants).
+- Trois façons de définir le contenu d'un module :
+
+#+begin_src rust
+// 1. inline
+mod jardin {
+    pub mod legumes { pub fn planter() {} }
+}
+
+// 2. fichier frère : src/jardin.rs
+mod jardin;
+
+// 3. dossier : src/jardin/mod.rs  (ou src/jardin.rs + src/jardin/legumes.rs)
+mod jardin;
+#+end_src
+
+** Chemins (paths)
+
+- *absolu* : part de =crate= → =crate::jardin::legumes::planter()=
+- *relatif* : =self=, =super= (module parent), ou nom direct.
+- =use= crée un raccourci (import) dans le scope courant.
+
+#+begin_src rust
+use crate::jardin::legumes::planter;
+planter();
+#+end_src
+
+** Visibilité
+
+| Mot-clé    | Portée                               |
+|------------+--------------------------------------|
+| (rien)     | privé au module                      |
+| =pub=        | public                               |
+| =pub(crate)= | public dans toute la crate seulement |
+| =pub(super)= | public pour le module parent         |
+
+* Schéma explicatif
+
+#+begin_example
+                         ┌──────────────────────────────────────────┐
+                         │              PACKAGE                     │
+                         │            (Cargo.toml)                  │
+                         │   nom · version · édition · deps         │
+                         └──────────────────────────────────────────┘
+                                          │ contient
+                  ┌───────────────────────┴────────────────────────┐
+                  ▼                                                 ▼
+        ┌───────────────────┐                          ┌───────────────────────┐
+        │  CRATE library    │                          │   CRATE binary        │
+        │   src/lib.rs      │                          │    src/main.rs        │
+        │  (crate root)     │                          │   fn main() {…}       │
+        └───────────────────┘                          └───────────────────────┘
+                  │ arbre de modules
+                  ▼
+        crate (racine)
+        ├── mod reseau            (src/reseau.rs)
+        │   ├── pub fn connecter()
+        │   └── mod client        (src/reseau/client.rs)
+        │       └── pub fn envoyer()
+        └── mod jardin            (src/jardin/mod.rs)
+            └── pub mod legumes
+                └── pub fn planter()
+
+   Accès depuis main.rs :
+       use ma_lib::reseau::connecter;   // crate externe (la library du package)
+       crate::jardin::legumes::planter(); // chemin absolu interne
+#+end_example
+
+* Arborescence type d'un package
+
+#+begin_example
+mon_package/
+├── Cargo.toml          ← définit le PACKAGE
+├── src/
+│   ├── lib.rs          ← racine de la CRATE library
+│   ├── main.rs         ← racine d'une CRATE binary
+│   ├── reseau.rs       ← MODULE reseau
+│   ├── reseau/
+│   │   └── client.rs   ← MODULE reseau::client
+│   └── bin/
+│       └── outil.rs    ← CRATE binary supplémentaire
+└── tests/              ← crates d'intégration (1 crate par fichier)
+#+end_example
+
+* À retenir
+
+- =Cargo.toml= = 1 package.
+- 1 package = 0..1 library + 0..N binaries.
+- 1 crate = 1 compilation = 1 arbre de modules avec racine =crate=.
+- =mod= découpe, =pub= expose, =use= raccourcit, les paths localisent.

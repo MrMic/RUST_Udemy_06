@@ -1,0 +1,5 @@
+# section06/Cargo.toml
+[workspace]
+resolver = "2"
+members = ["my_package"]
+licence = "MIT"

@@ -1,0 +1,194 @@
+% Created 2026-06-20 sam. 14:33
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{Michaël CHLON}
+\date{2026-06-20}
+\title{Architecture d'un projet Rust : Package / Crate / Module}
+\hypersetup{
+ pdfauthor={Michaël CHLON},
+ pdftitle={Architecture d'un projet Rust : Package / Crate / Module},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={},
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\setcounter{tocdepth}{2}
+\tableofcontents
+
+\section{Vue d'ensemble}
+\label{sec:org49e60e1}
+
+Rust organise le code sur trois niveaux emboîtés :
+
+\begin{center}
+\begin{tabular}{lll}
+Niveau & Rôle & Défini par\\
+\hline
+\textbf{Package} & Unité de distribution / build (Cargo) & \texttt{Cargo.toml}\\
+\textbf{Crate} & Unité de compilation (1 arbre de modules) & un fichier racine (.rs)\\
+\textbf{Module} & Unité d'organisation + visibilité & mot-clé \texttt{mod}\\
+\end{tabular}
+\end{center}
+
+Relation d'inclusion :
+
+\begin{verbatim}
+Package  ⊇  1+ Crates  ⊇  arbre de Modules  ⊇  items (fn, struct, enum...)
+\end{verbatim}
+\section{Package}
+\label{sec:org5227173}
+
+\begin{itemize}
+\item Plus grande unité gérée par \textbf{Cargo}.
+\item Décrit par un seul \texttt{Cargo.toml} (nom, version, dépendances, édition).
+\item Contient \textbf{au moins une} crate, \textbf{au plus une} crate \emph{library}.
+\item Peut contenir \textbf{plusieurs} crates \emph{binary}.
+\end{itemize}
+
+Règles de Cargo (convention = racines de crate automatiques) :
+
+\begin{center}
+\begin{tabular}{ll}
+Chemin & Crate produite\\
+\hline
+\texttt{src/main.rs} & crate binary (nom du package)\\
+\texttt{src/lib.rs} & crate library (nom du package)\\
+\texttt{src/bin/*.rs} & crates binary supplémentaires\\
+\end{tabular}
+\end{center}
+\section{Crate}
+\label{sec:orgd0134a2}
+
+\begin{itemize}
+\item \textbf{Unité de compilation} : le compilateur \texttt{rustc} traite une crate à la fois.
+\item Deux types :
+\begin{itemize}
+\item \textbf{binary} : possède \texttt{fn main()}, produit un exécutable.
+\item \textbf{library} : pas de \texttt{main}, produit du code réutilisable (\texttt{.rlib}).
+\end{itemize}
+\item Chaque crate a un \textbf{module racine} (crate root) :
+\begin{itemize}
+\item \texttt{main.rs} → module racine de la crate binary
+\item \texttt{lib.rs}  → module racine de la crate library
+\end{itemize}
+\item La crate forme un \textbf{arbre de modules} dont la racine s'appelle \texttt{crate}.
+\end{itemize}
+\section{Module}
+\label{sec:org2016793}
+
+\begin{itemize}
+\item Unité d'\textbf{organisation} et de \textbf{contrôle de visibilité} (\texttt{pub}).
+\item Déclaré avec \texttt{mod}. Par défaut tout est \textbf{privé} (visible seulement dans le module et ses descendants).
+\item Trois façons de définir le contenu d'un module :
+\end{itemize}
+
+\begin{verbatim}
+// 1. inline
+mod jardin {
+    pub mod legumes { pub fn planter() {} }
+}
+
+// 2. fichier frère : src/jardin.rs
+mod jardin;
+
+// 3. dossier : src/jardin/mod.rs  (ou src/jardin.rs + src/jardin/legumes.rs)
+mod jardin;
+\end{verbatim}
+\subsection{Chemins (paths)}
+\label{sec:orga1476c2}
+
+\begin{itemize}
+\item \textbf{absolu} : part de \texttt{crate} → \texttt{crate::jardin::legumes::planter()}
+\item \textbf{relatif} : \texttt{self}, \texttt{super} (module parent), ou nom direct.
+\item \texttt{use} crée un raccourci (import) dans le scope courant.
+\end{itemize}
+
+\begin{verbatim}
+use crate::jardin::legumes::planter;
+planter();
+\end{verbatim}
+\subsection{Visibilité}
+\label{sec:org8ce9101}
+
+\begin{center}
+\begin{tabular}{ll}
+Mot-clé & Portée\\
+\hline
+(rien) & privé au module\\
+\texttt{pub} & public\\
+\texttt{pub(crate)} & public dans toute la crate seulement\\
+\texttt{pub(super)} & public pour le module parent\\
+\end{tabular}
+\end{center}
+\section{Schéma explicatif}
+\label{sec:org0f16377}
+
+\begin{verbatim}
+                         ┌──────────────────────────────────────────┐
+                         │              PACKAGE                     │
+                         │            (Cargo.toml)                  │
+                         │   nom · version · édition · deps         │
+                         └──────────────────────────────────────────┘
+                                          │ contient
+                  ┌───────────────────────┴────────────────────────┐
+                  ▼                                                 ▼
+        ┌───────────────────┐                          ┌───────────────────────┐
+        │  CRATE library    │                          │   CRATE binary        │
+        │   src/lib.rs      │                          │    src/main.rs        │
+        │  (crate root)     │                          │   fn main() {…}       │
+        └───────────────────┘                          └───────────────────────┘
+                  │ arbre de modules
+                  ▼
+        crate (racine)
+        ├── mod reseau            (src/reseau.rs)
+        │   ├── pub fn connecter()
+        │   └── mod client        (src/reseau/client.rs)
+        │       └── pub fn envoyer()
+        └── mod jardin            (src/jardin/mod.rs)
+            └── pub mod legumes
+                └── pub fn planter()
+
+   Accès depuis main.rs :
+       use ma_lib::reseau::connecter;   // crate externe (la library du package)
+       crate::jardin::legumes::planter(); // chemin absolu interne
+\end{verbatim}
+\section{Arborescence type d'un package}
+\label{sec:org105b0fa}
+
+\begin{verbatim}
+mon_package/
+├── Cargo.toml          ← définit le PACKAGE
+├── src/
+│   ├── lib.rs          ← racine de la CRATE library
+│   ├── main.rs         ← racine d'une CRATE binary
+│   ├── reseau.rs       ← MODULE reseau
+│   ├── reseau/
+│   │   └── client.rs   ← MODULE reseau::client
+│   └── bin/
+│       └── outil.rs    ← CRATE binary supplémentaire
+└── tests/              ← crates d'intégration (1 crate par fichier)
+\end{verbatim}
+\section{À retenir}
+\label{sec:orgfdd8a76}
+
+\begin{itemize}
+\item \texttt{Cargo.toml} = 1 package.
+\item 1 package = 0..1 library + 0..N binaries.
+\item 1 crate = 1 compilation = 1 arbre de modules avec racine \texttt{crate}.
+\item \texttt{mod} découpe, \texttt{pub} expose, \texttt{use} raccourcit, les paths localisent.
+\end{itemize}
+\end{document}
