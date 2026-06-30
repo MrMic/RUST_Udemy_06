@@ -2,6 +2,8 @@
 // INFO: MODULES
 // -----------------------------------------------------
 
+use std::arch::x86_64::_ktestc_mask16_u8;
+
 fn main() {
     println!("Hello, world!");
 }
